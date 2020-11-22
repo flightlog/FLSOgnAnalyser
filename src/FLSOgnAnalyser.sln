@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30709.132
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FLS.OgnAnalyser.Service", "FLS.OgnAnalyser.Service\FLS.OgnAnalyser.Service.csproj", "{752A4044-46A9-438F-B9FE-278935BBD02C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FLS.OgnAnalyser.ConsoleApp", "FLS.OgnAnalyser.ConsoleApp\FLS.OgnAnalyser.ConsoleApp.csproj", "{042019F4-4744-47BA-9B3F-7AE02AA4180B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{752A4044-46A9-438F-B9FE-278935BBD02C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{752A4044-46A9-438F-B9FE-278935BBD02C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{752A4044-46A9-438F-B9FE-278935BBD02C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{752A4044-46A9-438F-B9FE-278935BBD02C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{042019F4-4744-47BA-9B3F-7AE02AA4180B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{042019F4-4744-47BA-9B3F-7AE02AA4180B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{042019F4-4744-47BA-9B3F-7AE02AA4180B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{042019F4-4744-47BA-9B3F-7AE02AA4180B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D7C1CAE7-6ABE-4AED-B072-0024A2F2E13B}
+	EndGlobalSection
+EndGlobal
