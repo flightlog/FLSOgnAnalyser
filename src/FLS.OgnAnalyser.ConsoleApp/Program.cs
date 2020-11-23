@@ -9,6 +9,11 @@ using System.IO;
 using System.Xml.Serialization;
 using FLS.OgnAnalyser.Service.Airports;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using FLS.OgnAnalyser.Service.Ogn;
+using FLS.OgnAnalyser.Common.Converters;
 
 namespace FLS.OgnAnalyser.ConsoleApp
 {
@@ -27,12 +32,12 @@ namespace FLS.OgnAnalyser.ConsoleApp
                 analyser.OnTakeoff += (sender, e) =>
                 {
 
-                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})");
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})");
                 };
 
                 analyser.OnLanding += (sender, e) =>
                 {
-                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})");
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})");
                 };
 
                 analyser.OnLaunchCompleted += (sender, e) =>
@@ -49,7 +54,7 @@ namespace FLS.OgnAnalyser.ConsoleApp
 
                     var lastPositionUpdate = e.Flight.PositionUpdates.OrderByDescending(q => q.TimeStamp).First();
 
-                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Radar contact near {e.NearLocation} at {lastPositionUpdate.Latitude}, {lastPositionUpdate.Longitude} @ {lastPositionUpdate.Altitude}ft {lastPositionUpdate.Heading.ToHeadingArrow()}");
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft}  {e.Immatriculation} - Radar contact near {e.NearLocation} at {lastPositionUpdate.Latitude}, {lastPositionUpdate.Longitude} @ {lastPositionUpdate.Altitude}ft {lastPositionUpdate.Heading.ToHeadingArrow()}");
                 };
 
                 analyser.OnContextDispose += (sender, e) =>
@@ -68,6 +73,7 @@ namespace FLS.OgnAnalyser.ConsoleApp
         {
             services.AddTransient<AnalyserService>();
             services.AddTransient<List<Airport>>(x => LoadAirports());
+            services.AddTransient<OgnDevices>(x => FetchOgnDevices());
 
             var serilogLogger = new LoggerConfiguration()
             .WriteTo.File("FLSOgnAnalyser.log")
@@ -89,6 +95,30 @@ namespace FLS.OgnAnalyser.ConsoleApp
 
                 return xml.Airports;
             }
+        }
+
+        private static OgnDevices FetchOgnDevices()
+        {
+            try
+            {
+                using (var httpClient = new HttpClient())
+                {
+                    var ddbTask = Task.Run(async () => await httpClient.GetAsync("http://ddb.glidernet.org/download?j=1"));
+
+                    if (ddbTask.Result.IsSuccessStatusCode)
+                    {
+                        var ddbContent = ddbTask.Result.Content.ReadAsStringAsync();
+                        var ognDevices = JsonConvert.DeserializeObject<OgnDevices>(ddbContent.Result, new JsonBooleanConverter());
+                        return ognDevices;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                //Logger.Error(ex, $"Error while processing synchronisation. Error: {ex.Message}");
+            }
+            
+            return new OgnDevices();
         }
     }
 }

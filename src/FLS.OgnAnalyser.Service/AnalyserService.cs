@@ -11,6 +11,7 @@ using Humanizer;
 using FLS.OgnAnalyser.Service.Extensions;
 using FLS.OgnAnalyser.Service.Airports;
 using FLS.OgnAnalyser.Service.EventArgs;
+using FLS.OgnAnalyser.Service.Ogn;
 
 namespace FLS.OgnAnalyser.Service
 {
@@ -25,7 +26,7 @@ namespace FLS.OgnAnalyser.Service
 
         private Listener AprsClient;
         private readonly ILogger _logger;
-        //private OgnDevices OgnDevices;
+        private OgnDevices _ognDevices;
         private List<Airport> _airports = new List<Airport>();
 
         private FlightContextFactory FlightContextFactory = new FlightContextFactory(options =>
@@ -46,9 +47,10 @@ namespace FLS.OgnAnalyser.Service
         });
         private bool disposedValue;
 
-        public AnalyserService(List<Airport> airports, ILogger<AnalyserService> logger)
+        public AnalyserService(List<Airport> airports, OgnDevices ognDevices, ILogger<AnalyserService> logger)
         {
             _airports = airports;
+            _ognDevices = ognDevices;
             _logger = logger;
         }
 
@@ -112,24 +114,28 @@ namespace FLS.OgnAnalyser.Service
             factory.OnTakeoff += (sender, args) =>
             {
                 var location = GetLocation(args.Flight.DepartureLocation);
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, args.Flight.GetFullFlightInformation());
+                var immatriculation = GetImmatriculation(args.Flight.Aircraft);
+
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - Took off from {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, immatriculation, location, args.Flight.GetFullFlightInformation());
                 //OnTakeoff?.Invoke(sender, args);
-                OnTakeoff?.Invoke(this, new MovementEventArgs(args.Flight, location));
+                OnTakeoff?.Invoke(this, new MovementEventArgs(args.Flight, location, immatriculation));
             };
 
             factory.OnLaunchCompleted += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - launch completed - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.GetFullFlightInformation());
+                var immatriculation = GetImmatriculation(args.Flight.Aircraft);
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - launch completed - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, immatriculation, args.Flight.GetFullFlightInformation());
                 OnLaunchCompleted?.Invoke(sender, args);
             };
 
             factory.OnLanding += (sender, args) =>
             {
                 var location = GetLocation(args.Flight.ArrivalLocation);
+                var immatriculation = GetImmatriculation(args.Flight.Aircraft);
 
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, args.Flight.GetFullFlightInformation());
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - Landed at {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, immatriculation, location, args.Flight.GetFullFlightInformation());
                 //OnLanding?.Invoke(sender, args);
-                OnLanding?.Invoke(this, new MovementEventArgs(args.Flight, location));
+                OnLanding?.Invoke(this, new MovementEventArgs(args.Flight, location, immatriculation));
             };
 
             factory.OnRadarContact += (sender, args) =>
@@ -141,22 +147,25 @@ namespace FLS.OgnAnalyser.Service
 
                 var lastPositionUpdate = args.Flight.PositionUpdates.OrderByDescending(q => q.TimeStamp).First();
                 var location = GetLocation(lastPositionUpdate.Location);
+                var immatriculation = GetImmatriculation(args.Flight.Aircraft);
 
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact near {Location} at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow(), args.Flight.GetFullFlightInformation());
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - Radar contact near {Location} at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, immatriculation, location, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow(), args.Flight.GetFullFlightInformation());
 
                 //OnRadarContact?.Invoke(sender, args);
-                OnRadarContact?.Invoke(this, new MovementEventArgs(args.Flight, location));
+                OnRadarContact?.Invoke(this, new MovementEventArgs(args.Flight, location, immatriculation));
             };
 
             factory.OnCompletedWithErrors += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Flight completed with errors", DateTime.UtcNow, args.Flight.Aircraft);
+                var immatriculation = GetImmatriculation(args.Flight.Aircraft);
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - Flight completed with errors", DateTime.UtcNow, args.Flight.Aircraft, immatriculation);
                 OnCompletedWithErrors?.Invoke(sender, args);
             };
 
             factory.OnContextDispose += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Context disposed", DateTime.UtcNow, args.Context.Flight.Aircraft);
+                var immatriculation = GetImmatriculation(args.Context.Flight.Aircraft);
+                _logger.LogInformation("{UtcNow}: {Aircraft} {Immatriculation} - Context disposed", DateTime.UtcNow, args.Context.Flight.Aircraft, immatriculation);
                 OnContextDispose?.Invoke(sender, args);
             };
         }
@@ -209,6 +218,19 @@ namespace FLS.OgnAnalyser.Service
             }
 
             return "Unknown Airfield";
+        }
+
+        private string GetImmatriculation(string ognDeviceId)
+        {
+            foreach (var device in _ognDevices.Devices)
+            {
+                if (device.DeviceId == ognDeviceId.Substring(3, 6))
+                {
+                    return device.Registration;
+                }
+            }
+
+            return "unknown";
         }
 
         /// <summary>
