@@ -17,4 +17,10 @@
     <ProjectReference Include="..\FLS.OgnAnalyser.Service\FLS.OgnAnalyser.Service.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="openaip_airports_switzerland_ch.aip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

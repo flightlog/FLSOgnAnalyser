@@ -1,29 +1,32 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Boerman.AprsClient;
 using Boerman.AprsClient.Enums;
 using Skyhop.FlightAnalysis;
 using Skyhop.FlightAnalysis.Models;
 using NetTopologySuite.Geometries;
 using Microsoft.Extensions.Logging;
-using System.Linq;
 using Humanizer;
 using FLS.OgnAnalyser.Service.Extensions;
+using FLS.OgnAnalyser.Service.Airports;
+using FLS.OgnAnalyser.Service.EventArgs;
 
 namespace FLS.OgnAnalyser.Service
 {
     public class AnalyserService : IDisposable
     {
         public event EventHandler<OnCompletedWithErrorsEventArgs> OnCompletedWithErrors;
-        public event EventHandler<OnTakeoffEventArgs> OnTakeoff;
         public event EventHandler<OnLaunchCompletedEventArgs> OnLaunchCompleted;
-        public event EventHandler<OnLandingEventArgs> OnLanding;
-        public event EventHandler<OnRadarContactEventArgs> OnRadarContact;
         public event EventHandler<OnContextDisposedEventArgs> OnContextDispose;
+        public event EventHandler<MovementEventArgs> OnLanding;
+        public event EventHandler<MovementEventArgs> OnTakeoff;
+        public event EventHandler<MovementEventArgs> OnRadarContact;
 
         private Listener AprsClient;
         private readonly ILogger _logger;
         //private OgnDevices OgnDevices;
-        //public List<Airport> Airports = new List<Airport>();
+        private List<Airport> _airports = new List<Airport>();
 
         private FlightContextFactory FlightContextFactory = new FlightContextFactory(options =>
         {
@@ -43,8 +46,9 @@ namespace FLS.OgnAnalyser.Service
         });
         private bool disposedValue;
 
-        public AnalyserService(ILogger<AnalyserService> logger)
+        public AnalyserService(List<Airport> airports, ILogger<AnalyserService> logger)
         {
+            _airports = airports;
             _logger = logger;
         }
 
@@ -107,8 +111,10 @@ namespace FLS.OgnAnalyser.Service
             // Subscribe to the events so we can propagate 'em via the factory
             factory.OnTakeoff += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {DepartureLocationX}, {DepartureLocationY} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y, args.Flight.GetFullFlightInformation());
-                OnTakeoff?.Invoke(sender, args);
+                var location = GetLocation(args.Flight.DepartureLocation);
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, args.Flight.GetFullFlightInformation());
+                //OnTakeoff?.Invoke(sender, args);
+                OnTakeoff?.Invoke(this, new MovementEventArgs(args.Flight, location));
             };
 
             factory.OnLaunchCompleted += (sender, args) =>
@@ -119,8 +125,11 @@ namespace FLS.OgnAnalyser.Service
 
             factory.OnLanding += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {DepartureLocationX}, {DepartureLocationY} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y, args.Flight.GetFullFlightInformation());
-                OnLanding?.Invoke(sender, args);
+                var location = GetLocation(args.Flight.ArrivalLocation);
+
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {Location} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, args.Flight.GetFullFlightInformation());
+                //OnLanding?.Invoke(sender, args);
+                OnLanding?.Invoke(this, new MovementEventArgs(args.Flight, location));
             };
 
             factory.OnRadarContact += (sender, args) =>
@@ -131,10 +140,12 @@ namespace FLS.OgnAnalyser.Service
                 }
 
                 var lastPositionUpdate = args.Flight.PositionUpdates.OrderByDescending(q => q.TimeStamp).First();
+                var location = GetLocation(lastPositionUpdate.Location);
 
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow(), args.Flight.GetFullFlightInformation());
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact near {Location} at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, location, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow(), args.Flight.GetFullFlightInformation());
 
-                OnRadarContact?.Invoke(sender, args);
+                //OnRadarContact?.Invoke(sender, args);
+                OnRadarContact?.Invoke(this, new MovementEventArgs(args.Flight, location));
             };
 
             factory.OnCompletedWithErrors += (sender, args) =>
@@ -183,6 +194,101 @@ namespace FLS.OgnAnalyser.Service
             // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        private string GetLocation(Point flightLocation)
+        {
+            if (flightLocation == null) return "no Location";
+
+            foreach (var airport in _airports)
+            {
+                if (Distance(airport.GeoLocation.Point, flightLocation) <= 5)
+                {
+                    return $"{airport.Name} ({airport.Icao})";
+                }
+            }
+
+            return "Unknown Airfield";
+        }
+
+        /// <summary>
+        /// see https://www.geodatasource.com/developers/c-sharp
+        /// </summary>
+        /// <param name="p1"></param>
+        /// <param name="p2"></param>
+        /// <returns></returns>
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        //:::                                                                         :::
+        //:::  This routine calculates the distance between two points (given the     :::
+        //:::  latitude/longitude of those points). It is being used to calculate     :::
+        //:::  the distance between two locations using GeoDataSource(TM) products    :::
+        //:::                                                                         :::
+        //:::  Definitions:                                                           :::
+        //:::    South latitudes are negative, east longitudes are positive           :::
+        //:::                                                                         :::
+        //:::  Passed to function:                                                    :::
+        //:::    lat1, lon1 = Latitude and Longitude of point 1 (in decimal degrees)  :::
+        //:::    lat2, lon2 = Latitude and Longitude of point 2 (in decimal degrees)  :::
+        //:::    unit = the unit you desire for results                               :::
+        //:::           where: 'M' is statute miles (default)                         :::
+        //:::                  'K' is kilometers                                      :::
+        //:::                  'N' is nautical miles                                  :::
+        //:::                                                                         :::
+        //:::  Worldwide cities and other features databases with latitude longitude  :::
+        //:::  are available at https://www.geodatasource.com                         :::
+        //:::                                                                         :::
+        //:::  For enquiries, please contact sales@geodatasource.com                  :::
+        //:::                                                                         :::
+        //:::  Official Web site: https://www.geodatasource.com                       :::
+        //:::                                                                         :::
+        //:::           GeoDataSource.com (C) All Rights Reserved 2018                :::
+        //:::                                                                         :::
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        private double Distance(Point p1, Point p2)
+        {
+            var lat1 = p1.Y;
+            var lon1 = p1.X;
+            var lat2 = p2.Y;
+            var lon2 = p2.X;
+            var unit = 'K';
+
+            if ((lat1 == lat2) && (lon1 == lon2))
+            {
+                return 0;
+            }
+            else
+            {
+                double theta = lon1 - lon2;
+                double dist = Math.Sin(deg2rad(lat1)) * Math.Sin(deg2rad(lat2)) + Math.Cos(deg2rad(lat1)) * Math.Cos(deg2rad(lat2)) * Math.Cos(deg2rad(theta));
+                dist = Math.Acos(dist);
+                dist = rad2deg(dist);
+                dist = dist * 60 * 1.1515;
+                if (unit == 'K')
+                {
+                    dist = dist * 1.609344;
+                }
+                else if (unit == 'N')
+                {
+                    dist = dist * 0.8684;
+                }
+                return (dist);
+            }
+        }
+
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        //::  This function converts decimal degrees to radians             :::
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        private double deg2rad(double deg)
+        {
+            return (deg * Math.PI / 180.0);
+        }
+
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        //::  This function converts radians to decimal degrees             :::
+        //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+        private double rad2deg(double rad)
+        {
+            return (rad / Math.PI * 180.0);
         }
     }
 }
