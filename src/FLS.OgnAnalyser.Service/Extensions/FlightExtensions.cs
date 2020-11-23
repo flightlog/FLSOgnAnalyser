@@ -12,33 +12,33 @@ namespace FLS.OgnAnalyser.Service.Extensions
             var sb = new StringBuilder();
             sb.Append("ID: ");
             sb.Append(flight.Id);
-            sb.Append("Aircraft: ");
+            sb.Append(" Aircraft: ");
             sb.Append(flight.Aircraft);
-            sb.Append("State: ");
+            sb.Append(" State: ");
             sb.Append(flight.State);
-            sb.Append("Completed: ");
+            sb.Append(" Completed: ");
             sb.Append(flight.Completed);
-            sb.Append("LaunchMethod: ");
+            sb.Append(" LaunchMethod: ");
             sb.Append(flight.LaunchMethod);
-            sb.Append("LaunchFinished: ");
+            sb.Append(" LaunchFinished: ");
             sb.Append(flight.LaunchFinished);
 
-            sb.Append("DepartureInfoFound: ");
+            sb.Append(" DepartureInfoFound: ");
             sb.Append(flight.DepartureInfoFound);
-            sb.Append("DepartureTime: ");
+            sb.Append(" DepartureTime: ");
             sb.Append(flight.DepartureTime);
-            sb.Append("DepartureLocation: ");
+            sb.Append(" DepartureLocation: ");
             sb.Append(flight.DepartureLocation);
-            sb.Append("DepartureHeading: ");
+            sb.Append(" DepartureHeading: ");
             sb.Append(flight.DepartureHeading);
 
-            sb.Append("ArrivalInfoFound: ");
+            sb.Append(" ArrivalInfoFound: ");
             sb.Append(flight.ArrivalInfoFound);
-            sb.Append("ArrivalTime: ");
+            sb.Append(" ArrivalTime: ");
             sb.Append(flight.ArrivalTime);
-            sb.Append("ArrivalLocation: ");
+            sb.Append(" ArrivalLocation: ");
             sb.Append(flight.ArrivalLocation);
-            sb.Append("ArrivalHeading: ");
+            sb.Append(" ArrivalHeading: ");
             sb.Append(flight.ArrivalHeading);
 
             return sb.ToString();

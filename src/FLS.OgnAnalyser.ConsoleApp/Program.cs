@@ -22,12 +22,17 @@ namespace FLS.OgnAnalyser.ConsoleApp
                 analyser.OnTakeoff += (sender, e) =>
                 {
 
-                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Took off from {e.Flight.DepartureLocation.X}, {e.Flight.DepartureLocation.Y}");
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Took off from {e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X}");
                 };
 
                 analyser.OnLanding += (sender, e) =>
                 {
-                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Landed at {e.Flight.ArrivalLocation.X}, {e.Flight.ArrivalLocation.Y}");
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - Landed at {e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X}");
+                };
+
+                analyser.OnLaunchCompleted += (sender, e) =>
+                {
+                    Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} - launch completed {e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X}");
                 };
 
                 analyser.OnRadarContact += (sender, e) =>
