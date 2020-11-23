@@ -1,13 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System;
-using System.Collections.Generic;
 using Boerman.AprsClient;
 using Boerman.AprsClient.Enums;
 using Skyhop.FlightAnalysis;
 using Skyhop.FlightAnalysis.Models;
 using NetTopologySuite.Geometries;
+using Microsoft.Extensions.Logging;
+using System.Linq;
+using Humanizer;
 
 namespace FLS.OgnAnalyser.Service
 {
@@ -21,6 +20,7 @@ namespace FLS.OgnAnalyser.Service
         public event EventHandler<OnContextDisposedEventArgs> OnContextDispose;
 
         private Listener AprsClient;
+        private readonly ILogger _logger;
         //private OgnDevices OgnDevices;
         //public List<Airport> Airports = new List<Airport>();
 
@@ -42,13 +42,14 @@ namespace FLS.OgnAnalyser.Service
         });
         private bool disposedValue;
 
-        public AnalyserService()
+        public AnalyserService(ILogger<AnalyserService> logger)
         {
-
+            _logger = logger;
         }
 
         public void Run()
         {
+            _logger.LogInformation("Starting AnalyserService");
             SubscribeContextFactoryEventHandlers(FlightContextFactory);
 
 
@@ -92,7 +93,7 @@ namespace FLS.OgnAnalyser.Service
                 catch (Exception ex)
                 {
                     //ColorConsole.WriteLine($"Error: {ex.Message}: AprsMessage: {e.AprsMessage}", ConsoleColor.Red);
-
+                    _logger.LogError(ex, "Error: {ExceptionMessage}: AprsMessage: {AprsMessage}", ex.Message, e.AprsMessage);
                 }
             };
 
@@ -102,12 +103,49 @@ namespace FLS.OgnAnalyser.Service
         private void SubscribeContextFactoryEventHandlers(FlightContextFactory factory)
         {
             // Subscribe to the events so we can propagate 'em via the factory
-            factory.OnTakeoff += (sender, args) => OnTakeoff?.Invoke(sender, args);
-            factory.OnLaunchCompleted += (sender, args) => OnLaunchCompleted?.Invoke(sender, args);
-            factory.OnLanding += (sender, args) => OnLanding?.Invoke(sender, args);
-            factory.OnRadarContact += (sender, args) => OnRadarContact?.Invoke(sender, args);
-            factory.OnCompletedWithErrors += (sender, args) => OnCompletedWithErrors?.Invoke(sender, args);
-            factory.OnContextDispose += (sender, args) => OnContextDispose?.Invoke(sender, args);
+            factory.OnTakeoff += (sender, args) =>
+            {
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {DepartureLocationX}, {DepartureLocationY}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y);
+                OnTakeoff?.Invoke(sender, args);
+            };
+
+            factory.OnLaunchCompleted += (sender, args) =>
+            {
+                _logger.LogInformation("{UtcNow}: {Aircraft} - launch completed", DateTime.UtcNow, args.Flight.Aircraft);
+                OnLaunchCompleted?.Invoke(sender, args);
+            };
+
+            factory.OnLanding += (sender, args) =>
+            {
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {DepartureLocationX}, {DepartureLocationY}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y);
+                OnLanding?.Invoke(sender, args);
+            };
+
+            factory.OnRadarContact += (sender, args) =>
+            {
+                if (args.Flight.PositionUpdates.Any() == false)
+                {
+                    return;
+                }
+
+                var lastPositionUpdate = args.Flight.PositionUpdates.OrderByDescending(q => q.TimeStamp).First();
+
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading}", DateTime.UtcNow, args.Flight.Aircraft, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow());
+
+                OnRadarContact?.Invoke(sender, args);
+            };
+
+            factory.OnCompletedWithErrors += (sender, args) =>
+            {
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Flight completed with errors", DateTime.UtcNow, args.Flight.Aircraft);
+                OnCompletedWithErrors?.Invoke(sender, args);
+            };
+
+            factory.OnContextDispose += (sender, args) =>
+            {
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Context disposed", DateTime.UtcNow, args.Context.Flight.Aircraft);
+                OnContextDispose?.Invoke(sender, args);
+            };
         }
 
         protected virtual void Dispose(bool disposing)
@@ -116,6 +154,8 @@ namespace FLS.OgnAnalyser.Service
             {
                 if (disposing)
                 {
+                    _logger.LogInformation("Disposing AnalyserService");
+
                     if (AprsClient != null)
                     {
                         AprsClient.Close();
