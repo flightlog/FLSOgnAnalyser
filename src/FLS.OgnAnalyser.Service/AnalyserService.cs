@@ -7,6 +7,7 @@ using NetTopologySuite.Geometries;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 using Humanizer;
+using FLS.OgnAnalyser.Service.Extensions;
 
 namespace FLS.OgnAnalyser.Service
 {
@@ -50,6 +51,7 @@ namespace FLS.OgnAnalyser.Service
         public void Run()
         {
             _logger.LogInformation("Starting AnalyserService");
+
             SubscribeContextFactoryEventHandlers(FlightContextFactory);
 
 
@@ -105,19 +107,19 @@ namespace FLS.OgnAnalyser.Service
             // Subscribe to the events so we can propagate 'em via the factory
             factory.OnTakeoff += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {DepartureLocationX}, {DepartureLocationY}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y);
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Took off from {DepartureLocationX}, {DepartureLocationY} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y, args.Flight.GetFullFlightInformation());
                 OnTakeoff?.Invoke(sender, args);
             };
 
             factory.OnLaunchCompleted += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - launch completed", DateTime.UtcNow, args.Flight.Aircraft);
+                _logger.LogInformation("{UtcNow}: {Aircraft} - launch completed - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.GetFullFlightInformation());
                 OnLaunchCompleted?.Invoke(sender, args);
             };
 
             factory.OnLanding += (sender, args) =>
             {
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {DepartureLocationX}, {DepartureLocationY}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y);
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Landed at {DepartureLocationX}, {DepartureLocationY} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, args.Flight.DepartureLocation.X, args.Flight.DepartureLocation.Y, args.Flight.GetFullFlightInformation());
                 OnLanding?.Invoke(sender, args);
             };
 
@@ -130,7 +132,7 @@ namespace FLS.OgnAnalyser.Service
 
                 var lastPositionUpdate = args.Flight.PositionUpdates.OrderByDescending(q => q.TimeStamp).First();
 
-                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading}", DateTime.UtcNow, args.Flight.Aircraft, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow());
+                _logger.LogInformation("{UtcNow}: {Aircraft} - Radar contact at {LastPositionLatitude}, {LastPositionLongitude} @ {LastPositionAltitude}ft {LastPositionHeading} - Flight Info: {FlightInfo}", DateTime.UtcNow, args.Flight.Aircraft, lastPositionUpdate.Latitude, lastPositionUpdate.Longitude, lastPositionUpdate.Altitude, lastPositionUpdate.Heading.ToHeadingArrow(), args.Flight.GetFullFlightInformation());
 
                 OnRadarContact?.Invoke(sender, args);
             };
