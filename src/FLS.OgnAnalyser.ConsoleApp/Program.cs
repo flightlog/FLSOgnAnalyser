@@ -14,11 +14,14 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using FLS.OgnAnalyser.Service.Ogn;
 using FLS.OgnAnalyser.Common.Converters;
+using Serilog.Filters;
+using Serilog.Context;
 
 namespace FLS.OgnAnalyser.ConsoleApp
 {
     public class Program
     {
+        private static Microsoft.Extensions.Logging.ILogger _logger;
         static void Main(string[] args)
         {
             var services = new ServiceCollection();
@@ -27,16 +30,26 @@ namespace FLS.OgnAnalyser.ConsoleApp
 
             using (ServiceProvider serviceProvider = services.BuildServiceProvider())
             {
+                _logger = serviceProvider.GetService<ILogger<Program>>();
                 AnalyserService analyser = serviceProvider.GetService<AnalyserService>();
 
                 analyser.OnTakeoff += (sender, e) =>
                 {
+                    using (LogContext.PushProperty("FLS", true))
+                    {
+                        _logger.LogInformation("{e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.DepartureLocation?.Y, e.Flight.DepartureLocation?.X);
+                    }
 
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})");
                 };
 
                 analyser.OnLanding += (sender, e) =>
                 {
+                    using (LogContext.PushProperty("FLS", true))
+                    {
+                        _logger.LogInformation("{e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.ArrivalLocation?.Y, e.Flight.ArrivalLocation?.X);
+                    }
+
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})");
                 };
 
@@ -76,7 +89,13 @@ namespace FLS.OgnAnalyser.ConsoleApp
             services.AddTransient<OgnDevices>(x => FetchOgnDevices());
 
             var serilogLogger = new LoggerConfiguration()
-            .WriteTo.File("FLSOgnAnalyser.log")
+                .WriteTo
+                .File("FLSOgnAnalyser.log")
+                .WriteTo.Logger(lc => lc
+                    .Enrich.FromLogContext()
+                    .Filter.ByIncludingOnly(Matching.WithProperty("FLS"))
+                    .WriteTo
+                    .File("FLSOgnAnalyserEvents.log"))
             .CreateLogger();
 
             services.AddLogging(builder =>
