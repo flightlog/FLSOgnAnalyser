@@ -37,7 +37,7 @@ namespace FLS.OgnAnalyser.ConsoleApp
                 {
                     using (LogContext.PushProperty("FLS", true))
                     {
-                        _logger.LogInformation("{e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.DepartureLocation?.Y, e.Flight.DepartureLocation?.X);
+                        _logger.LogInformation("{Aircraft} {Immatriculation} - Took off from {NearLocation} ({DepartureLocationY}, {DepartureLocationX})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.DepartureLocation?.Y, e.Flight.DepartureLocation?.X);
                     }
 
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})");
@@ -47,7 +47,7 @@ namespace FLS.OgnAnalyser.ConsoleApp
                 {
                     using (LogContext.PushProperty("FLS", true))
                     {
-                        _logger.LogInformation("{e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.ArrivalLocation?.Y, e.Flight.ArrivalLocation?.X);
+                        _logger.LogInformation("{Aircraft} {Immatriculation} - Landed at {NearLocation} ({ArrivalLocationY}, {ArrivalLocationX})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.ArrivalLocation?.Y, e.Flight.ArrivalLocation?.X);
                     }
 
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})");

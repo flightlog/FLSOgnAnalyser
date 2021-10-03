@@ -64,8 +64,7 @@ namespace FLS.OgnAnalyser.Service
             var builder = new AprsFilterBuilder();
             builder.AddFilter(new AprsFilter.Range(46.801111, 8.226667, 250)); // geographical center of switzerland
             var filter = builder.GetFilter();
-
-            AprsClient = new Listener(new Config()
+            var aprsConfig = new Config()
             {
                 Callsign = @"Speck78",
                 Password = "-1",
@@ -73,8 +72,11 @@ namespace FLS.OgnAnalyser.Service
                 UseOgnAdditives = true,
                 Port = 14580,
                 Filter = filter
-            });
+            };
 
+            AprsClient = new Listener(aprsConfig);
+
+            _logger.LogInformation("Created new AprsClient with config: {aprsConfig}", System.Text.Json.JsonSerializer.Serialize(aprsConfig));
             AprsClient.PacketReceived += (sender, e) =>
             {
                 try
@@ -95,7 +97,7 @@ namespace FLS.OgnAnalyser.Service
                     }
                     catch (Exception exception)
                     {
-
+                        _logger.LogError(exception, "Error: {ExceptionMessage}: Position update: {PositionUpdate}", exception.Message, posUpdate);
                     }
                 }
                 catch (Exception ex)
@@ -106,6 +108,8 @@ namespace FLS.OgnAnalyser.Service
             };
 
             AprsClient.Open();
+
+            _logger.LogInformation("Opened Aprs Client");
         }
 
         private void SubscribeContextFactoryEventHandlers(FlightContextFactory factory)
@@ -209,15 +213,43 @@ namespace FLS.OgnAnalyser.Service
         {
             if (flightLocation == null) return "no Location";
 
+            var possibleAirports = new List<Airport>();
+            var airportDistanceRadius = 5;
+
             foreach (var airport in _airports)
             {
-                if (Distance(airport.GeoLocation.Point, flightLocation) <= 5)
+                if (Distance(airport.GeoLocation.Point, flightLocation) <= airportDistanceRadius)
                 {
-                    return $"{airport.Name} ({airport.Icao})";
+                    possibleAirports.Add(airport);
                 }
             }
 
-            return "Unknown Airfield";
+            if (possibleAirports.Count == 0)
+            {
+                return "Unknown Airfield";
+            }
+            else if (possibleAirports.Count == 1)
+            {
+                return $"{possibleAirports[0].Name} ({possibleAirports[0].Icao})";
+            }
+            else
+            {
+                double distance = airportDistanceRadius;
+                Airport nearestAirport = null;
+
+                foreach(var airport in possibleAirports)
+                {
+                    var dist = Distance(airport.GeoLocation.Point, flightLocation);
+
+                    if (dist <= distance)
+                    {
+                        nearestAirport = airport;
+                        distance = dist;
+                    }
+                }
+
+                return $"{nearestAirport.Name} ({nearestAirport.Icao})";
+            }
         }
 
         private string GetImmatriculation(string ognDeviceId)
