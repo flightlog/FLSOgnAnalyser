@@ -107,7 +107,23 @@ namespace FLS.OgnAnalyser.ConsoleApp
 
         private static List<Airport> LoadAirports()
         {
-            using (var fileStream = File.Open("openaip_airports_switzerland_ch.aip", FileMode.Open))
+            var airports = new List<Airport>();
+
+            airports.AddRange(LoadAirports(@"Resources\openaip_airports_austria_at.aip"));
+            airports.AddRange(LoadAirports(@"Resources\openaip_airports_france_fr.aip"));
+            airports.AddRange(LoadAirports(@"Resources\openaip_airports_germany_de.aip"));
+            airports.AddRange(LoadAirports(@"Resources\openaip_airports_liechtenstein_li.aip"));
+            airports.AddRange(LoadAirports(@"Resources\openaip_airports_switzerland_ch.aip"));
+
+            _logger.LogInformation("Loaded {number} airports.", airports.Count);
+            Console.WriteLine($"Loaded {airports.Count} airports.");
+
+            return airports;
+        }
+
+        private static List<Airport> LoadAirports(string filename)
+        {
+            using (var fileStream = File.Open(filename, FileMode.Open))
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(OpenAipAirports));
                 var xml = (OpenAipAirports)serializer.Deserialize(fileStream);
@@ -128,15 +144,20 @@ namespace FLS.OgnAnalyser.ConsoleApp
                     {
                         var ddbContent = ddbTask.Result.Content.ReadAsStringAsync();
                         var ognDevices = JsonConvert.DeserializeObject<OgnDevices>(ddbContent.Result, new JsonBooleanConverter());
+
+                        _logger.LogInformation("Fetched {number} OGN devices.", ognDevices.Devices.Count);
+                        Console.WriteLine($"Fetched {ognDevices.Devices.Count} OGN devices.");
+
                         return ognDevices;
                     }
                 }
             }
             catch (Exception ex)
             {
-                //Logger.Error(ex, $"Error while processing synchronisation. Error: {ex.Message}");
+                _logger.LogError(ex, "Error while fetching OGN devices. Error: {Message}", ex.Message);
+                Console.WriteLine($"Error while fetching OGN devices. Error: {ex.Message}");
             }
-            
+
             return new OgnDevices();
         }
     }

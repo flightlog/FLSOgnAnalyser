@@ -19,7 +19,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="openaip_airports_switzerland_ch.aip">
+    <None Update="Resources\openaip_airports_austria_at.aip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\openaip_airports_france_fr.aip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\openaip_airports_germany_de.aip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\openaip_airports_liechtenstein_li.aip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\openaip_airports_switzerland_ch.aip">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
