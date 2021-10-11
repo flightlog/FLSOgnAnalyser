@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Boerman.AprsClient;
-using Boerman.AprsClient.Enums;
 using Skyhop.FlightAnalysis;
 using Skyhop.FlightAnalysis.Models;
 using NetTopologySuite.Geometries;
@@ -12,6 +10,11 @@ using FLS.OgnAnalyser.Service.Extensions;
 using FLS.OgnAnalyser.Service.Airports;
 using FLS.OgnAnalyser.Service.EventArgs;
 using FLS.OgnAnalyser.Service.Ogn;
+using Serilog.Context;
+using Skyhop.Aprs.Client;
+using Skyhop.Aprs.Client.Models;
+using Skyhop.Aprs.Client.Enums;
+using System.Threading.Tasks;
 
 namespace FLS.OgnAnalyser.Service
 {
@@ -23,6 +26,7 @@ namespace FLS.OgnAnalyser.Service
         public event EventHandler<MovementEventArgs> OnLanding;
         public event EventHandler<MovementEventArgs> OnTakeoff;
         public event EventHandler<MovementEventArgs> OnRadarContact;
+        public event EventHandler<PacketReceivedEventArgs> OnAprsMessageReceived;
 
         private Listener AprsClient;
         private readonly ILogger _logger;
@@ -36,11 +40,11 @@ namespace FLS.OgnAnalyser.Service
                 return new[]
                 {
                         new Runway(
-                            new Point(8.385181, 46.970523, 1476),
+                            new Point(8.385181, 46.970523, 1476),   //Buochs
                             new Point(8.408432, 46.978157, 1476)
                         ),
                         new Runway(
-                            new Point(8.760951, 47.374918, 1759),
+                            new Point(8.760951, 47.374918, 1759),   //Speck
                             new Point(8.754110, 47.377973, 1759))
                     };
             };
@@ -54,7 +58,7 @@ namespace FLS.OgnAnalyser.Service
             _logger = logger;
         }
 
-        public void Run()
+        public async Task RunAsync()
         {
             _logger.LogInformation("Starting AnalyserService");
 
@@ -83,14 +87,36 @@ namespace FLS.OgnAnalyser.Service
                 {
                     if (e.AprsMessage.DataType == DataType.Status) return;
 
+                    var altitude = 0;
+
+                    if (e.AprsMessage.Altitude != null) altitude = e.AprsMessage.Altitude.FeetAboveSeaLevel;
+
                     var posUpdate = new Skyhop.FlightAnalysis.Models.PositionUpdate(
                         e.AprsMessage.Callsign,
                         e.AprsMessage.ReceivedDate,
                         e.AprsMessage.Latitude.AbsoluteValue,
                         e.AprsMessage.Longitude.AbsoluteValue,
-                        e.AprsMessage.Altitude.FeetAboveSeaLevel,
+                        altitude,
                         e.AprsMessage.Speed.Knots,
-                        e.AprsMessage.Direction.ToDegrees());
+                        e.AprsMessage.Direction.ToDegrees(),
+                        e.AprsMessage.DeviceId,
+                        (Skyhop.FlightAnalysis.Models.AddressType)e.AprsMessage.AddressType,
+                        (Skyhop.FlightAnalysis.Models.AircraftType)e.AprsMessage.AircraftType);
+
+                    try
+                    {
+                        using (LogContext.PushProperty("Aprs", true))
+                        {
+                            _logger.LogInformation("Aprs-Message,{Aprs}", e.AprsMessage.RawData);
+                        }
+
+                        OnAprsMessageReceived?.Invoke(sender, e);
+                    }
+                    catch
+                    {
+
+                    }
+
                     try
                     {
                         FlightContextFactory.Process(posUpdate);
@@ -107,7 +133,7 @@ namespace FLS.OgnAnalyser.Service
                 }
             };
 
-            AprsClient.Open();
+            _ = await AprsClient.Open();
 
             _logger.LogInformation("Opened Aprs Client");
         }

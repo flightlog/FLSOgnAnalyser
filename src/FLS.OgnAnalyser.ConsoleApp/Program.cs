@@ -1,5 +1,6 @@
 ﻿using FLS.OgnAnalyser.Service;
 using Humanizer;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -16,6 +17,9 @@ using FLS.OgnAnalyser.Service.Ogn;
 using FLS.OgnAnalyser.Common.Converters;
 using Serilog.Filters;
 using Serilog.Context;
+using FLS.OgnAnalyser.ConsoleApp.Config;
+using FLS.OgnAnalyser.ConsoleApp.FLS;
+using Microsoft.Extensions.Options;
 
 namespace FLS.OgnAnalyser.ConsoleApp
 {
@@ -32,25 +36,55 @@ namespace FLS.OgnAnalyser.ConsoleApp
             {
                 _logger = serviceProvider.GetService<ILogger<Program>>();
                 AnalyserService analyser = serviceProvider.GetService<AnalyserService>();
+                FlsClient flsClient = serviceProvider.GetService<FlsClient>();
+                FlsOptions flsOptions = serviceProvider.GetService<IOptions<FlsOptions>>().Value;
 
-                analyser.OnTakeoff += (sender, e) =>
+                analyser.OnTakeoff += async (sender, e) =>
                 {
                     using (LogContext.PushProperty("FLS", true))
                     {
-                        _logger.LogInformation("{Aircraft} {Immatriculation} - Took off from {NearLocation} ({DepartureLocationY}, {DepartureLocationX})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.DepartureLocation?.Y, e.Flight.DepartureLocation?.X);
+                        _logger.LogInformation("{Aircraft} {Immatriculation} ({aircraftType})- Took off from {NearLocation} ({DepartureLocationY}, {DepartureLocationX})", e.Flight.Aircraft, e.Immatriculation, e.Flight.AircraftType, e.NearLocation, e.Flight.DepartureLocation?.Y, e.Flight.DepartureLocation?.X);
                     }
 
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Took off from {e.NearLocation} ({e.Flight.DepartureLocation?.Y}, {e.Flight.DepartureLocation?.X})");
+
+                    if (flsOptions.FeedIntoFls)
+                    {
+                        var takeOffDetails = new TakeOffDetails()
+                        {
+                            OgnDeviceId = e.Flight.DeviceId,
+                            AircraftType = e.Flight.AircraftType,
+                            Immatriculation = e.Immatriculation,
+                            TakeOffLocationIcaoCode = e.NearLocation,
+                            TakeOffTimeUtc = e.Flight.DepartureTime.GetValueOrDefault(DateTime.UtcNow)
+                        };
+
+                        await flsClient.SendTakeOffAsync(takeOffDetails);
+                    }
                 };
 
-                analyser.OnLanding += (sender, e) =>
+                analyser.OnLanding += async (sender, e) =>
                 {
                     using (LogContext.PushProperty("FLS", true))
                     {
-                        _logger.LogInformation("{Aircraft} {Immatriculation} - Landed at {NearLocation} ({ArrivalLocationY}, {ArrivalLocationX})", e.Flight.Aircraft, e.Immatriculation, e.NearLocation, e.Flight.ArrivalLocation?.Y, e.Flight.ArrivalLocation?.X);
+                        _logger.LogInformation("{Aircraft} {Immatriculation} ({aircraftType}) - Landed at {NearLocation} ({ArrivalLocationY}, {ArrivalLocationX})", e.Flight.Aircraft, e.Immatriculation, e.Flight.AircraftType, e.NearLocation, e.Flight.ArrivalLocation?.Y, e.Flight.ArrivalLocation?.X);
                     }
 
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Flight.Aircraft} {e.Immatriculation} - Landed at {e.NearLocation} ({e.Flight.ArrivalLocation?.Y}, {e.Flight.ArrivalLocation?.X})");
+
+                    if (flsOptions.FeedIntoFls)
+                    {
+                        var landingDetails = new LandingDetails()
+                        {
+                            OgnDeviceId = e.Flight.DeviceId,
+                            AircraftType = e.Flight.AircraftType,
+                            Immatriculation = e.Immatriculation,
+                            LandingLocationIcaoCode = e.NearLocation,
+                            LandingTimeUtc = e.Flight.ArrivalTime.GetValueOrDefault(DateTime.UtcNow)
+                        };
+
+                        await flsClient.SendLandingAsync(landingDetails);
+                    }
                 };
 
                 analyser.OnLaunchCompleted += (sender, e) =>
@@ -75,7 +109,14 @@ namespace FLS.OgnAnalyser.ConsoleApp
                     Console.WriteLine($"{DateTime.UtcNow}: {e.Context.Flight.Aircraft} - Context disposed");
                 };
 
-                analyser.Run();
+#if DEBUG
+                analyser.OnAprsMessageReceived += (sender, e) =>
+                {
+                    Console.WriteLine($"Aprs message received from {e.AprsMessage.Callsign}, received date: {e.AprsMessage.ReceivedDate}, Lat: {e.AprsMessage.Latitude}, Long: {e.AprsMessage.Longitude}, Alt: {e.AprsMessage.Altitude} ft above Seelevel, Speed: {e.AprsMessage.Speed}, Direction: {e.AprsMessage.Direction}");
+                };
+#endif
+
+                Task task = analyser.RunAsync();
 
                 Console.WriteLine("Currently checking to see if we can receive some information!");
                 Console.Read();
@@ -84,10 +125,18 @@ namespace FLS.OgnAnalyser.ConsoleApp
 
         private static void ConfigureServices(ServiceCollection services)
         {
-            services.AddTransient<AnalyserService>();
-            services.AddTransient<List<Airport>>(x => LoadAirports());
-            services.AddTransient<OgnDevices>(x => FetchOgnDevices());
+            // build config
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("AppSettings.json", optional: false)
+                .AddEnvironmentVariables()
+                .Build();
 
+            services.Configure<FlsOptions>(configuration.GetSection("FlsOptions"));
+
+            //serilog with sub-loggers
+            //see also: https://nblumhardt.com/2016/07/serilog-2-write-to-logger/
+            //or: https://stackoverflow.com/questions/65285590/serilog-filter-by-method-name
             var serilogLogger = new LoggerConfiguration()
                 .WriteTo
                 .File("FLSOgnAnalyser.log")
@@ -96,13 +145,23 @@ namespace FLS.OgnAnalyser.ConsoleApp
                     .Filter.ByIncludingOnly(Matching.WithProperty("FLS"))
                     .WriteTo
                     .File("FLSOgnAnalyserEvents.log"))
+                .WriteTo.Logger(lc => lc
+                    .Enrich.FromLogContext()
+                    .Filter.ByIncludingOnly(Matching.WithProperty("Aprs"))
+                    .WriteTo
+                    .File("Aprs.log"))
             .CreateLogger();
 
             services.AddLogging(builder =>
             {
-                builder.SetMinimumLevel(LogLevel.Debug);
+                builder.SetMinimumLevel(LogLevel.Trace);
                 builder.AddSerilog(logger: serilogLogger, dispose: true);
             });
+
+            services.AddTransient<AnalyserService>();
+            services.AddTransient<FlsClient>();
+            services.AddTransient<List<Airport>>(x => LoadAirports());
+            services.AddTransient<OgnDevices>(x => FetchOgnDevices());
         }
 
         private static List<Airport> LoadAirports()

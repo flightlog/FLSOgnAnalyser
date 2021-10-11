@@ -5,11 +5,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Boerman.AprsClient" Version="1.2.8" />
     <PackageReference Include="Humanizer" Version="2.11.10" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.1" />
-    <PackageReference Include="Skyhop.FlightAnalysis" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Aprs\Skyhop.Aprs.Client\Skyhop.Aprs.Client.csproj" />
+    <ProjectReference Include="..\..\..\FlightAnalysis\libs\Skyhop.FlightAnalysis\Skyhop.FlightAnalysis.csproj" />
   </ItemGroup>
 
 </Project>
